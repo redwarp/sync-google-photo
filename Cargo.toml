@@ -13,3 +13,4 @@ reqwest = { version = "0.11", features = ["json"] }
 anyhow = "1.0"
 dialoguer = "0.10"
 futures = "0.3"
+tempfile = "3.3"

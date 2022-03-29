@@ -9,6 +9,7 @@ use reqwest::Client;
 use std::fs::{self, File};
 use std::io::{copy, Cursor};
 use std::path::PathBuf;
+use tempfile::NamedTempFile;
 
 use crate::api::{
     AlbumsListRequest, AlbumsListResponse, MediaItemResponse, MediaItemSearchRequest,
@@ -222,13 +223,15 @@ struct Item {
 async fn download_file(item: &Item) -> Result<()> {
     println!("Downloading {}", item.filename);
     let folder = "downloads";
-    fs::create_dir_all(folder)?;
     let url = match &item.media_type {
         MediaType::Photo => format!("{}={}", item.base_url, "d"),
         MediaType::Video => format!("{}={}", item.base_url, "dv"),
     };
 
+    fs::create_dir_all(folder)?;
+
     let mut response = reqwest::get(url).await?;
+
     let filename = PathBuf::from(folder).join(&item.filename);
     let mut file = File::create(filename)?;
 
@@ -236,40 +239,6 @@ async fn download_file(item: &Item) -> Result<()> {
         let mut cursor = Cursor::new(chunk);
         copy(&mut cursor, &mut file)?;
     }
-
-    Ok(())
-}
-
-async fn download_file_own(item: Item) -> Result<()> {
-    println!("Downloading {}", item.filename);
-    let folder = "downloads";
-    fs::create_dir_all(folder)?;
-    let url = match &item.media_type {
-        MediaType::Photo => format!("{}={}", item.base_url, "d"),
-        MediaType::Video => format!("{}={}", item.base_url, "dv"),
-    };
-
-    let mut response = reqwest::get(url).await?;
-    let filename = PathBuf::from(folder).join(&item.filename);
-    let mut file = File::create(filename)?;
-
-    while let Some(chunk) = response.chunk().await? {
-        let mut cursor = Cursor::new(chunk);
-        copy(&mut cursor, &mut file)?;
-    }
-
-    Ok(())
-}
-
-async fn download_files(items: &[Item]) -> Result<()> {
-    let downloads = stream::iter(
-        items
-            .iter()
-            .map(|item| async move { download_file(item).await }),
-    )
-    .buffer_unordered(4)
-    .collect::<Vec<_>>();
-    downloads.await;
 
     Ok(())
 }
@@ -363,36 +332,14 @@ async fn download_all(client: &Client, album_id: &str) -> Result<()> {
     });
     // pin_mut!(stream);
 
-    let items1 = stream.flat_map(|page_result: Result<_, _>| match page_result {
+    let items = stream.flat_map(|page_result: Result<_, _>| match page_result {
         Ok(page) => stream::iter(page.items.into_iter().map(Ok).collect::<Vec<_>>()),
         _ => stream::iter(vec![Err(anyhow!("Error with page"))]),
     });
 
-    items1
-        .try_for_each_concurrent(4, |item| async move { download_file_own(item).await })
+    items
+        .try_for_each_concurrent(4, |item| async move { download_file(&item).await })
         .await?;
-
-    // let items = stream
-    //     .filter_map(|result| async { result.ok() })
-    //     .flat_map(|page| stream::iter(page.items));
-    // // let pages: Result<Page> = stream.try_collect().await;
-    // pin_mut!(items);
-
-    // items
-    //     .for_each_concurrent(4, |item| async {
-    //         download_file_own(item).await;
-    //     })
-    //     .await;
-
-    // while let Some(item) = items.next().await {
-    //     download_file(&item).await?;
-    // }
-
-    // let items = items
-    //     .map(|item| async { download_file_own(item).await })
-    //     .buffer_unordered(4);
-
-    // items.collect::<Vec<_>>().await;
 
     Ok(())
 }
