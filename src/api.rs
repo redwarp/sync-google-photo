@@ -3,6 +3,9 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
+pub struct Id(String);
+
+#[derive(Debug)]
 pub struct Album {
     pub id: String,
     pub title: String,

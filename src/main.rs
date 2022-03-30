@@ -1,9 +1,11 @@
 use anyhow::{anyhow, Error, Result};
 use api::Album;
+use args::Cli;
+use clap::StructOpt;
+use config::{configure, does_config_exist};
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::Select;
 use directories::ProjectDirs;
-use file_picker::{FilePicker, FileType};
 use futures::TryStreamExt;
 use futures::{stream, StreamExt};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
@@ -18,10 +20,26 @@ use crate::api::{
 };
 
 mod api;
+mod args;
+mod config;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    dostuff().await?;
+    let cli = Cli::parse();
+    let project_dirs = ProjectDirs::from("app", "Redwarp", "Sync Google Photo")
+        .expect("Couldn't create a project dir");
+
+    let should_configure = if cli.configure {
+        true
+    } else {
+        !does_config_exist(&project_dirs)
+    };
+
+    if should_configure {
+        configure(&project_dirs).await;
+    } else {
+        dostuff().await?;
+    }
 
     Ok(())
 }
@@ -339,7 +357,6 @@ async fn download_all(client: &Client, album_id: &str) -> Result<()> {
             Paging::Finish => Ok(None),
         }
     });
-    // pin_mut!(stream);
 
     let items = stream.flat_map(|page_result: Result<_, _>| match page_result {
         Ok(page) => stream::iter(page.items.into_iter().map(Ok).collect::<Vec<_>>()),

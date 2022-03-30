@@ -1,5 +1,10 @@
 use core::fmt;
-use std::{cmp::Ordering, fs, io, ops::Rem, path::PathBuf};
+use std::{
+    cmp::Ordering,
+    fs, io,
+    ops::Rem,
+    path::{Path, PathBuf},
+};
 
 use console::{Key, Term};
 use dialoguer::theme::{SimpleTheme, Theme};
@@ -316,8 +321,8 @@ impl FilePicker<'_> {
         }
     }
 
-    fn list_files_in_folder(folder: &PathBuf, file_type: &FileType) -> io::Result<Vec<PathBuf>> {
-        fn entry_match(entry: &PathBuf, file_type: &FileType) -> bool {
+    fn list_files_in_folder(folder: &Path, file_type: &FileType) -> io::Result<Vec<PathBuf>> {
+        fn entry_match(entry: &Path, file_type: &FileType) -> bool {
             if entry.file_name().is_none() {
                 return false;
             }
