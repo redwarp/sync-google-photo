@@ -1,0 +1,9 @@
+[package]
+name = "file-picker"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dialoguer = "0.10"
+directories = "4.0"
+console = "0.15"

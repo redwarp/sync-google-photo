@@ -2,14 +2,15 @@ use anyhow::{anyhow, Error, Result};
 use api::Album;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::Select;
+use directories::ProjectDirs;
+use file_picker::{FilePicker, FileType};
 use futures::TryStreamExt;
 use futures::{stream, StreamExt};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use reqwest::Client;
-use std::fs::{self, File};
+use std::fs::{self, create_dir_all, File};
 use std::io::{copy, Cursor};
 use std::path::PathBuf;
-use tempfile::NamedTempFile;
 
 use crate::api::{
     AlbumsListRequest, AlbumsListResponse, MediaItemResponse, MediaItemSearchRequest,
@@ -20,14 +21,17 @@ mod api;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    println!("Hello");
-
     dostuff().await?;
 
     Ok(())
 }
 
 async fn dostuff() -> Result<()> {
+    let project_dirs = ProjectDirs::from("app", "Redwarp", "Sync Google Photo")
+        .expect("Couldn't create a project dir");
+    let config_dir = project_dirs.config_dir();
+    create_dir_all(config_dir)?;
+
     let secret = yup_oauth2::parse_application_secret(include_bytes!("client_secrets.json"))
         .expect("Should be valid");
 
@@ -35,69 +39,74 @@ async fn dostuff() -> Result<()> {
         secret,
         yup_oauth2::InstalledFlowReturnMethod::HTTPRedirect,
     )
-    .persist_tokens_to_disk("tokencache.json")
+    .persist_tokens_to_disk(config_dir.join("tokencache.json"))
     .build()
-    .await
-    .unwrap();
+    .await;
 
-    let scopes = &["https://www.googleapis.com/auth/photoslibrary.readonly"];
+    match auth {
+        Ok(auth) => {
+            let scopes = &["https://www.googleapis.com/auth/photoslibrary.readonly"];
 
-    let token = auth.token(scopes).await?;
+            let token = auth.token(scopes).await?;
 
-    let mut headers = HeaderMap::new();
-    let mut auth_value: HeaderValue = format!("Bearer {}", token.as_str()).parse()?;
-    auth_value.set_sensitive(true);
+            let mut headers = HeaderMap::new();
+            let mut auth_value: HeaderValue = format!("Bearer {}", token.as_str()).parse()?;
+            auth_value.set_sensitive(true);
 
-    headers.insert(AUTHORIZATION, auth_value);
+            headers.insert(AUTHORIZATION, auth_value);
 
-    let client = Client::builder().default_headers(headers).build()?;
+            let client = Client::builder().default_headers(headers).build()?;
 
-    let album_types = &["Private albums", "Shared albums"];
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Select an album")
-        .default(0)
-        .items(album_types)
-        .interact()?;
-
-    let albums = match selection {
-        0 => list_albums(&client).await,
-        _ => list_shared_albums(&client).await,
-    }?;
-
-    let album_names: Vec<_> = albums.iter().map(|album| &album.title).collect();
-
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Select an album")
-        .default(0)
-        .items(&album_names)
-        .interact()?;
-
-    let album_id = &albums[selection].id;
-
-    let item_list = list_items(&client, album_id).await?;
-
-    let choices = &["Download all", "Pick one"];
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("What next?")
-        .default(0)
-        .items(choices)
-        .interact()?;
-
-    match selection {
-        0 => {
-            download_all(&client, album_id).await?;
-        }
-        _ => {
-            let item_names: Vec<_> = item_list.iter().map(|item| &item.filename).collect();
-
+            let album_types = &["Private albums", "Shared albums", "Cancel"];
             let selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt("Select a media")
+                .with_prompt("Select an album")
                 .default(0)
-                .items(&item_names)
+                .items(album_types)
                 .interact()?;
 
-            download_file(&item_list[selection]).await?;
+            let albums = match selection {
+                0 => list_albums(&client).await,
+                1 => list_shared_albums(&client).await,
+                _ => return Ok(()),
+            }?;
+
+            let album_names: Vec<_> = albums.iter().map(|album| &album.title).collect();
+
+            let selection = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("Select an album")
+                .default(0)
+                .items(&album_names)
+                .interact()?;
+
+            let album_id = &albums[selection].id;
+
+            let item_list = list_items(&client, album_id).await?;
+
+            let choices = &["Download all", "Pick one"];
+            let selection = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("What next?")
+                .default(0)
+                .items(choices)
+                .interact()?;
+
+            match selection {
+                0 => {
+                    download_all(&client, album_id).await?;
+                }
+                _ => {
+                    let item_names: Vec<_> = item_list.iter().map(|item| &item.filename).collect();
+
+                    let selection = Select::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Select a media")
+                        .default(0)
+                        .items(&item_names)
+                        .interact()?;
+
+                    download_file(&item_list[selection]).await?;
+                }
+            }
         }
+        Err(e) => return Err(e.into()),
     }
 
     Ok(())
