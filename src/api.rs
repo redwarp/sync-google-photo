@@ -1,6 +1,7 @@
+use anyhow::Result;
+use reqwest::Client;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{fmt::Display, ops::Deref};
-
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Id(pub String);
@@ -103,4 +104,38 @@ pub struct Video {}
 pub struct MediaItemResponse {
     pub media_items: Option<Vec<MediaItem>>,
     pub next_page_token: Option<String>,
+}
+
+pub struct Api {
+    client: Client,
+}
+
+impl Api {
+    pub fn new(client: Client) -> Self {
+        Self { client }
+    }
+
+    pub async fn get<Body, Out>(&self, url: &str, body: &Body) -> Result<Out>
+    where
+        Body: Serialize,
+        Out: DeserializeOwned,
+    {
+        let response = self.client.get(url).query(&body).send().await?;
+
+        let output: Out = response.json().await?;
+        Ok(output)
+    }
+
+    pub async fn post<Body, Out>(&self, url: &str, body: &Body) -> Result<Out>
+    where
+        Body: Serialize,
+        Out: DeserializeOwned,
+    {
+        let body = serde_json::to_string(body)?;
+
+        let response = self.client.post(url).body(body).send().await?;
+
+        let output: Out = response.json().await?;
+        Ok(output)
+    }
 }

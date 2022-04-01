@@ -1,10 +1,9 @@
 use anyhow::Result;
 use dialoguer::{theme::ColorfulTheme, Select};
-use reqwest::Client;
 
-use crate::api::{Album, AlbumsListRequest, AlbumsListResponse, SharedAlbumsListResponse};
+use crate::api::{Album, AlbumsListRequest, AlbumsListResponse, Api, SharedAlbumsListResponse};
 
-pub async fn pick_album(client: &Client) -> Result<Album> {
+pub async fn pick_album(api: &Api) -> Result<Album> {
     let album_types = &["Private albums", "Shared albums", "Cancel"];
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Select an album")
@@ -13,8 +12,8 @@ pub async fn pick_album(client: &Client) -> Result<Album> {
         .interact()?;
 
     let mut albums = match selection {
-        0 => list_albums(client).await,
-        1 => list_shared_albums(client).await,
+        0 => list_albums(api).await,
+        1 => list_shared_albums(api).await,
         _ => unreachable!("Only two choices"),
     }?;
 
@@ -30,19 +29,13 @@ pub async fn pick_album(client: &Client) -> Result<Album> {
     Ok(album)
 }
 
-async fn list_shared_albums(client: &Client) -> Result<Vec<Album>> {
-    let url = "https://photoslibrary.googleapis.com/v1/sharedAlbums";
-
-    let request_body = AlbumsListRequest::default();
-
-    let response = client.get(url).query(&request_body).send().await?;
-    println!("Request: {:?}", response);
-
-    let text = response.text().await?;
-    println!("Response: {}", text);
-
-    // let album_response: AlbumsListResponse = response.json().await?;
-    let album_response: SharedAlbumsListResponse = serde_json::from_str(&text)?;
+async fn list_shared_albums(api: &Api) -> Result<Vec<Album>> {
+    let album_response: SharedAlbumsListResponse = api
+        .get(
+            "https://photoslibrary.googleapis.com/v1/sharedAlbums",
+            &AlbumsListRequest::default(),
+        )
+        .await?;
 
     if let Some(albums) = album_response.shared_albums {
         Ok(albums
@@ -64,18 +57,13 @@ async fn list_shared_albums(client: &Client) -> Result<Vec<Album>> {
     }
 }
 
-async fn list_albums(client: &Client) -> Result<Vec<Album>> {
-    let url = "https://photoslibrary.googleapis.com/v1/albums";
-
-    let request_body = AlbumsListRequest::default();
-
-    let response = client.get(url).query(&request_body).send().await?;
-    println!("Request: {:?}", response);
-
-    let text = response.text().await?;
-    println!("Response: {}", text);
-
-    let album_response: AlbumsListResponse = serde_json::from_str(&text)?;
+async fn list_albums(api: &Api) -> Result<Vec<Album>> {
+    let album_response: AlbumsListResponse = api
+        .get(
+            "https://photoslibrary.googleapis.com/v1/albums",
+            &AlbumsListRequest::default(),
+        )
+        .await?;
 
     if let Some(albums) = album_response.albums {
         Ok(albums

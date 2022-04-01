@@ -7,11 +7,13 @@ use reqwest::{
     Client,
 };
 
+use crate::api::Api;
+
 lazy_static! {
-    static ref CLIENT: AsyncOnce<Result<Client>> = AsyncOnce::new(async { init_client().await });
+    static ref CLIENT: AsyncOnce<Result<Api>> = AsyncOnce::new(async { init_api().await });
 }
 
-pub async fn get_client<'a>() -> Result<&'a Client> {
+pub async fn get_api<'a>() -> Result<&'a Api> {
     let client = CLIENT
         .get()
         .await
@@ -21,10 +23,11 @@ pub async fn get_client<'a>() -> Result<&'a Client> {
     client
 }
 
-async fn init_client() -> Result<Client> {
+async fn init_api() -> Result<Api> {
     let project_dirs = ProjectDirs::from("app", "Redwarp", "Sync Google Photo")
         .expect("Couldn't create a project dir");
     let config_dir = project_dirs.config_dir();
+    std::fs::create_dir_all(config_dir)?;
 
     let secret = yup_oauth2::parse_application_secret(include_bytes!("client_secrets.json"))
         .expect("Should be valid");
@@ -48,6 +51,7 @@ async fn init_client() -> Result<Client> {
     headers.insert(AUTHORIZATION, auth_value);
 
     let client = Client::builder().default_headers(headers).build()?;
+    let api = Api::new(client);
 
-    Ok(client)
+    Ok(api)
 }

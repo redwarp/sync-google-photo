@@ -8,21 +8,21 @@ use std::{
     str::FromStr,
 };
 
-use crate::{album::pick_album, api::Id, client::get_client};
+use crate::{album::pick_album, api::Id, client::get_api};
 
 const CONFIG_FILE: &str = "config.json";
 const MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 
 #[derive(Serialize, Deserialize)]
-struct LocalAlbum {
-    path: PathBuf,
-    album_id: Id,
-    name: String,
+pub struct LocalAlbum {
+    pub path: PathBuf,
+    pub album_id: Id,
+    pub name: String,
 }
 
 #[derive(Serialize, Deserialize)]
-struct Configuration {
-    local_albums: Vec<LocalAlbum>,
+pub struct Configuration {
+    pub local_albums: Vec<LocalAlbum>,
 }
 
 impl Configuration {
@@ -38,7 +38,7 @@ impl Configuration {
         Ok(())
     }
 
-    fn load(project_dirs: &ProjectDirs) -> Result<Self> {
+    pub fn load(project_dirs: &ProjectDirs) -> Result<Self> {
         let config_file = project_dirs.config_dir().join(CONFIG_FILE);
         if config_file.exists() {
             let configuration: Configuration = serde_json::from_reader(&File::open(&config_file)?)?;
@@ -89,13 +89,15 @@ async fn add_new_album(
     configuration: &mut Configuration,
     project_dirs: &ProjectDirs,
 ) -> Result<()> {
-    let album = pick_album(get_client().await?).await?;
-    let path = PathBuf::from_str(MANIFEST_DIR)?.join(&album.title);
+    let album = pick_album(get_api().await?).await?;
+    let path = PathBuf::from_str(MANIFEST_DIR)?
+        .join("downloads")
+        .join(&album.title.trim());
 
     configuration.local_albums.push(LocalAlbum {
         path,
         album_id: album.id,
-        name: album.title,
+        name: album.title.trim().to_string(),
     });
 
     configuration.save(project_dirs)?;
