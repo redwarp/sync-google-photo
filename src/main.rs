@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Error, Result};
-use api::Album;
+use api::{Album, Id};
 use args::Cli;
 use clap::StructOpt;
 use config::{configure, does_config_exist};
@@ -19,8 +19,10 @@ use crate::api::{
     SharedAlbumsListResponse,
 };
 
+mod album;
 mod api;
 mod args;
+mod client;
 mod config;
 
 #[tokio::main]
@@ -36,7 +38,7 @@ async fn main() -> Result<()> {
     };
 
     if should_configure {
-        configure(&project_dirs).await;
+        configure(&project_dirs).await?;
     } else {
         dostuff().await?;
     }
@@ -204,11 +206,11 @@ async fn list_albums(client: &Client) -> Result<Vec<Album>> {
     }
 }
 
-async fn list_items(client: &Client, album_id: &str) -> Result<Vec<Item>> {
+async fn list_items(client: &Client, album_id: &Id) -> Result<Vec<Item>> {
     let url = "https://photoslibrary.googleapis.com/v1/mediaItems:search";
 
     let request_body = serde_json::to_string(&MediaItemSearchRequest {
-        album_id: album_id.to_string(),
+        album_id,
         page_size: Some(100),
         page_token: None,
     })?;
@@ -286,13 +288,13 @@ impl Extend<Page> for Page {
 
 async fn get_next_page(
     client: &Client,
-    album_id: &str,
+    album_id: &Id,
     next_page_token: Option<String>,
 ) -> Result<Page> {
     let url = "https://photoslibrary.googleapis.com/v1/mediaItems:search";
 
     let request_body = serde_json::to_string(&MediaItemSearchRequest {
-        album_id: album_id.to_string(),
+        album_id,
         page_size: Some(50),
         page_token: next_page_token,
     })?;
@@ -329,7 +331,7 @@ async fn get_next_page(
     })
 }
 
-async fn download_all(client: &Client, album_id: &str) -> Result<()> {
+async fn download_all(client: &Client, album_id: &Id) -> Result<()> {
     enum Paging {
         Starting,
         Next(String),

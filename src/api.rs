@@ -1,13 +1,21 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::Deref};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
-pub struct Id(String);
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Id(pub String);
+
+impl Deref for Id {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[derive(Debug)]
 pub struct Album {
-    pub id: String,
+    pub id: Id,
     pub title: String,
     pub product_url: String,
 }
@@ -21,7 +29,7 @@ impl Display for Album {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiAlbum {
-    pub id: String,
+    pub id: Id,
     pub title: Option<String>,
     pub product_url: String,
 }
@@ -60,8 +68,8 @@ impl Default for AlbumsListRequest {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MediaItemSearchRequest {
-    pub album_id: String,
+pub struct MediaItemSearchRequest<'a> {
+    pub album_id: &'a Id,
     pub page_size: Option<u32>,
     pub page_token: Option<String>,
 }
@@ -69,7 +77,7 @@ pub struct MediaItemSearchRequest {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MediaItem {
-    pub id: String,
+    pub id: Id,
     pub filename: String,
     pub base_url: String,
     pub media_metadata: MediaMetadata,

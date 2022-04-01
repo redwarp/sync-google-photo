@@ -16,6 +16,8 @@ dialoguer = "0.10"
 futures = "0.3"
 directories = "4.0"
 clap = { version = "3.1", features = ["derive"] }
+async_once = "0.2"
+lazy_static = "1.4"
 
 [workspace]
 members = ["file-picker"]
